@@ -3,12 +3,12 @@ sunkejia
 main file
 python main.py
 '''
-import descriminator.dataEffect as effect
-import descriminator.args as args
-from descriminator.util import ImageReader_Customize
+import dataEffect as effect
+import args as args
+from util import ImageReader_Customize
 import os
 import tensorflow as tf
-from descriminator.train import Trainer
+from train import Trainer
 import datetime
 import scipy.io as scio
 import cv2

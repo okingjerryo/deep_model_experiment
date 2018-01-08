@@ -12,9 +12,9 @@ import cv2
 import re
 import time
 from PIL import Image
-import descriminator.util as util
+import util as util
 import  logging
-import descriminator.model as nets
+import model as nets
 from tqdm import trange
 
 class Trainer(object):

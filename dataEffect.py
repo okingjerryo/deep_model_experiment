@@ -1,10 +1,10 @@
 import numpy as np
-import descriminator.args as args
+import args as args
 import tensorflow as tf
 import os.path
 import glymur
 import cv2
-import descriminator.util as util
+import util as util
 def convert_2d(r):
     # 添加均值为 0, 标准差为 64 的加性高斯白噪声
     s = r + np.random.normal(0, 64, r.shape)
