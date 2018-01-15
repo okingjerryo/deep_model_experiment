@@ -4,27 +4,27 @@ sunkejia
 train file
 python main.py
 '''
-import tensorflow as tf
-import numpy as np
-import tensorflow.contrib.slim as slim
+import logging
 import os
-import cv2
-import re
 import time
-from PIL import Image
-import util as util
-import  logging
-import model as nets
+
+import numpy as np
+import tensorflow as tf
+import tensorflow.contrib.slim as slim
 from tqdm import trange
 
+import model as nets
+import util as util
+
+
 class Trainer(object):
-    def __init__(self,sample_interval=20, restored=False, batch_size=128,
-                    epoch=240, log_dir='', d_learning_rate=0.0002,g_learning_rate=0.0002, beta1=0.5,
-                    test_batch_size=128, model_name='', output_channel=3,
-                    input_size=224, input_channel=3, data_loader_train=None,
-                    gpus_list='',check_point='check_point', output_size=224,
-                    version='',savepath='', imagepath='', logfile='',
-                    summary_dir='',discribe='',data_loader_valid=None,noise_z=50):
+    def __init__(self, sample_interval=20, restored=False, batch_size=128,
+                 epoch=240, log_dir='', d_learning_rate=0.0002, g_learning_rate=0.0002, beta1=0.5,
+                 test_batch_size=128, model_name='', output_channel=3,
+                 input_size=224, input_channel=3, data_loader_train=None,
+                 gpus_list='', check_point='check_point', output_size=224,
+                 version='', savepath='', imagepath='', logfile='',
+                 summary_dir='', discribe='', data_loader_valid=None, noise_z=10):
         self.ifsave = True
         self.restored=restored
         self.d_lr=d_learning_rate
@@ -203,16 +203,17 @@ class Trainer(object):
         :param reuse: True | False
         :return:
         '''
-        self.logits = nets.netG_encoder_gamma(self.batch_data, reuse=reuse)
+        self.logits = nets.netG_encoder_gamma_32(self.batch_data, reuse=reuse)
         self.noise = tf.random_uniform(shape=(self.batch_size, 1, 1, self.noise_z), minval=-1, maxval=1,
                                        dtype=tf.float32, name='input_noise')
 
         LogitsWithNoise = tf.concat([self.logits, self.noise], axis=3)
-        self.output_syn = nets.netG_deconder_gamma(LogitsWithNoise, self.output_channel, reuse=reuse)
+        self.output_syn = nets.netG_deconder_gamma_32(LogitsWithNoise, self.output_channel, reuse=reuse)
         self.data_gt, self.data_noise = tf.split(self.batch_data, 2, axis=0)
+
         self.data_gt_total = tf.concat([self.data_gt, self.data_gt], axis=0)
-        self.logits_d_real = nets.netD_discriminator_adloss(self.data_gt_total)
-        self.logits_d_fake = nets.netD_discriminator_adloss(self.output_syn, reuse=True)
+        self.logits_d_real = nets.netD_discriminator_adloss_32(self.data_gt_total)
+        self.logits_d_fake = nets.netD_discriminator_adloss_32(self.output_syn, reuse=True)
 
     def _loss_gan(self):
         '''
@@ -227,14 +228,14 @@ class Trainer(object):
             self.ad_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.zeros_like(self.logits_d_fake),logits=self.logits_d_fake
             ))
-            #L1 loss
-            self.constraint_loss=tf.reduce_mean(tf.abs(tf.subtract(self.output_syn, self.data_gt_total)))
+
 
         with tf.name_scope('G_loss'):
             self.ad_loss_syn = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.ones_like(self.logits_d_fake),logits=self.logits_d_fake
             ))
-
+            # L1 loss
+            self.constraint_loss = tf.reduce_mean(tf.abs(tf.subtract(self.output_syn, self.data_gt_total)))
         with tf.name_scope('loss'):
             tf.summary.scalar('ad_loss_real', self.ad_loss_real)
             tf.summary.scalar('ad_loss_fake',self.ad_loss_fake)
@@ -243,13 +244,31 @@ class Trainer(object):
 
         if True:
             tf.summary.image('image0/input1', tf.expand_dims(util.restore_img(self.batch_data[0][:,:,::-1]), 0))
-            tf.summary.image('image0/decoder', tf.expand_dims(util.restore_img(self.output_syn[0][:,:,::-1]), 0))
+            tf.summary.image('image0/input2',
+                             tf.expand_dims(util.restore_img(self.batch_data[int(self.batch_size / 2)][:, :, ::-1]), 0))
+            tf.summary.image('image0/decoder1', tf.expand_dims(util.restore_img(self.output_syn[0][:, :, ::-1]), 0))
+            tf.summary.image('image0/decoder2',
+                             tf.expand_dims(util.restore_img(self.output_syn[int(self.batch_size / 2)][:, :, ::-1]), 0))
 
+        
             tf.summary.image('image1/input1', tf.expand_dims(util.restore_img(self.batch_data[1][:,:,::-1]), 0))
-            tf.summary.image('image1/decoder', tf.expand_dims(util.restore_img(self.output_syn[1][:,:,::-1]), 0))
+            tf.summary.image('image1/input2',
+                             tf.expand_dims(util.restore_img(self.batch_data[int(self.batch_size / 2 + 1)][:, :, ::-1]),
+                                            0))
+            tf.summary.image('image1/decoder1', tf.expand_dims(util.restore_img(self.output_syn[1][:, :, ::-1]), 0))
+            tf.summary.image('image1/decoder2',
+                             tf.expand_dims(util.restore_img(self.output_syn[int(self.batch_size / 2 + 1)][:, :, ::-1]),
+                                            0))
 
+            
             tf.summary.image('image2/input1', tf.expand_dims(util.restore_img(self.batch_data[2][:,:,::-1]),0))
-            tf.summary.image('image2/decoder', tf.expand_dims(util.restore_img(self.output_syn[2][:,:,::-1]), 0))
+            tf.summary.image('image2/input2',
+                             tf.expand_dims(util.restore_img(self.batch_data[int(self.batch_size / 2 + 2)][:, :, ::-1]),
+                                            0))
+            tf.summary.image('image2/decoder1', tf.expand_dims(util.restore_img(self.output_syn[2][:, :, ::-1]), 0))
+            tf.summary.image('image2/decoder2',
+                             tf.expand_dims(util.restore_img(self.output_syn[int(self.batch_size / 2 + 2)][:, :, ::-1]),
+                                            0))
 
     def _loss_compute(self):
         '''
@@ -257,6 +276,8 @@ class Trainer(object):
         :return:
         '''
         self.d_loss =(self.ad_loss_real+self.ad_loss_fake)*0.001
+        # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
+        #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
         self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)

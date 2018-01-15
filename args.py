@@ -1,4 +1,7 @@
-import tensorflow as tf
+import os
+
+# sys using gpu
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 test_image = "resource/00283.bmp"
 oraginal_dir = "/home/huangfei/db/huatielu/test/original"

@@ -3,25 +3,24 @@ sunkejia
 main file
 python main.py
 '''
-import dataEffect as effect
-import args as args
-from util import ImageReader_Customize
-import os
-import tensorflow as tf
-from train import Trainer
 import datetime
-import scipy.io as scio
-import cv2
 import glob
 import sys
 
+import tensorflow as tf
+
+import args as args
+import dataEffect as effect
+from train import Trainer
+from util import ImageReader_Customize
+
 flags = tf.app.flags
-flags.DEFINE_integer("batch_size", 24, 'tarin_batch_size for one gpu')
+flags.DEFINE_integer("batch_size", 256, 'tarin_batch_size for one gpu')
 flags.DEFINE_integer("sample_batch_size",20, 'test,sample batch_size for one gpu,一般比pose_c相关')  # 保证可以被2、gpu数整除
 flags.DEFINE_string('root_path', './logdir_caspeal', 'root path')
-flags.DEFINE_integer("input_size", 224, 'train_size')
+flags.DEFINE_integer("input_size", 32, 'train_size')
 flags.DEFINE_integer("input_channel", 3, 'train_channel')
-flags.DEFINE_integer("output_size", 224, 'output_size')
+flags.DEFINE_integer("output_size", 32, 'output_size')
 flags.DEFINE_integer('src_size', 300, 'crop op in this size')
 flags.DEFINE_integer("output_channel", 3, 'out_put_channel')
 flags.DEFINE_boolean('train', True, 'if Train or inference')
@@ -30,7 +29,7 @@ flags.DEFINE_float("beta1", 0.5, 'moment--m')
 flags.DEFINE_float("d_learning_rate", 0.0002, 'base learning rate')
 flags.DEFINE_float("g_learning_rate", 0.0002, 'base_learning rate')
 flags.DEFINE_integer('mode', 2, 'GAN mode,2:mean MultiPIE')
-flags.DEFINE_float("validation_interval", 1, 'validation interval save the decode images')
+flags.DEFINE_float("validation_interval", 10, 'validation interval save the decode images')
 flags.DEFINE_integer("epoch", 240, 'train_epoch')
 
 '''image data reader'''
