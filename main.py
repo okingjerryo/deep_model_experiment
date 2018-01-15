@@ -6,7 +6,6 @@ python main.py
 import datetime
 import glob
 import sys
-
 import tensorflow as tf
 
 import args as args
@@ -106,4 +105,5 @@ def pic_process():
 if __name__ == '__main__':
     print(tf.__path__)
     # pic_process()
+    # 如果在分支中看到证明 分支正常
     main()
