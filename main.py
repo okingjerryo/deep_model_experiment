@@ -106,4 +106,5 @@ if __name__ == '__main__':
     print(tf.__path__)
     # pic_process()
     # 如果在分支中看到证明 分支正常
+    print("testing checkout")
     main()
