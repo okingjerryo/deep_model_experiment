@@ -18,7 +18,7 @@ import util as util
 
 
 class Trainer(object):
-    def __init__(self, sample_interval=20, restored=False, batch_size=128,
+    def __init__(self, sample_interval=20, restored=False, batch_size=64,
                  epoch=240, log_dir='', d_learning_rate=0.0002, g_learning_rate=0.0002, beta1=0.5,
                  test_batch_size=128, model_name='', output_channel=3,
                  input_size=224, input_channel=3, data_loader_train=None,
@@ -41,6 +41,8 @@ class Trainer(object):
         self.data_loader_valid = data_loader_valid
         self.epoch = epoch
         self.noise_z=noise_z
+        # 越训练到后面越需要细节
+        self.upgrade_q = 1
         #dir
         self.log_dir = log_dir
         self.savename=savepath
@@ -177,6 +179,7 @@ class Trainer(object):
                                    os.path.join(self.check_point_path, self.model_name),
                                    global_step=step)
                 curr_interval+=1
+            self.upgrade_q += 1  # 目的让网络训练到后面 L1权重越低
 
     def _get_train_op(self,global_step):
         '''
@@ -210,11 +213,14 @@ class Trainer(object):
         LogitsWithNoise = tf.concat([self.logits, self.noise], axis=3)
         self.output_syn = nets.netG_deconder_gamma_32(LogitsWithNoise, self.output_channel, reuse=reuse)
         self.data_gt, self.data_noise = tf.split(self.batch_data, 2, axis=0)
+        # cgan 方案 对于d而言 使用了 output+真图作为真;output+假图作为假
 
         self.data_gt_total = tf.concat([self.data_gt, self.data_gt], axis=0)
-        self.logits_d_real = nets.netD_discriminator_adloss_32(self.data_gt_total)
-        self.logits_d_fake = nets.netD_discriminator_adloss_32(self.output_syn, reuse=True)
+        self.data_fake_total = tf.concat([self.output_syn, self.data_noise], axis=0)
 
+        self.logits_d_real = nets.netD_discriminator_adloss_32(self.data_gt_total)
+        # self.logits_d_fake = nets.netD_discriminator_adloss_32(self.output_syn, reuse=True)
+        self.logits_d_fake = nets.netD_discriminator_adloss_32(self.data_fake_total, reuse=tf.AUTO_REUSE)
     def _loss_gan(self):
         '''
         loss 计算
@@ -275,10 +281,10 @@ class Trainer(object):
         loss 加权
         :return:
         '''
-        self.d_loss =(self.ad_loss_real+self.ad_loss_fake)*0.001
+        self.d_loss = (self.ad_loss_real + self.ad_loss_fake) * 0.001 * self.upgrade_q
         # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
         #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
-        self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
+        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.001 * self.upgrade_q
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)
 
