@@ -41,8 +41,7 @@ class Trainer(object):
         self.data_loader_valid = data_loader_valid
         self.epoch = epoch
         self.noise_z=noise_z
-        # 越训练到后面越需要细节
-        self.upgrade_q = 1
+
         #dir
         self.log_dir = log_dir
         self.savename=savepath
@@ -126,7 +125,6 @@ class Trainer(object):
         '''
         self.global_step = slim.get_or_create_global_step()
         self.batch_data = tf.placeholder(dtype=tf.float32,shape=[None,self.input_size,self.input_size,self.input_channel],name='input_images')#image
-
         #网络过程
         self._predict_gan()
         #损失公式
@@ -151,6 +149,7 @@ class Trainer(object):
         start_time = time.time()
 
         curr_interval=0
+        update_q = 1
         for epoch_n in trange(self.epoch): #trange
             for interval_i in range(int(self.batch_idxs)):
                 batch_image=np.zeros([self.batch_size*self.gpus_count,self.input_size,self.input_size,self.input_channel],np.float32)
@@ -179,8 +178,8 @@ class Trainer(object):
                                    os.path.join(self.check_point_path, self.model_name),
                                    global_step=step)
                 curr_interval+=1
-            self.upgrade_q += 1  # 目的让网络训练到后面 L1权重越低
-
+            # 目的让网络训练到后面 L1权重越低
+            update_q += 1
     def _get_train_op(self,global_step):
         '''
         梯度计算
@@ -214,7 +213,6 @@ class Trainer(object):
         self.output_syn = nets.netG_deconder_gamma_32(LogitsWithNoise, self.output_channel, reuse=reuse)
         self.data_gt, self.data_noise = tf.split(self.batch_data, 2, axis=0)
         # cgan 方案 对于d而言 使用了 output+真图作为真;output+假图作为假
-
         self.data_gt_total = tf.concat([self.data_gt, self.data_gt], axis=0)
         self.data_fake_total = tf.concat([self.output_syn, self.data_noise], axis=0)
 
@@ -281,10 +279,11 @@ class Trainer(object):
         loss 加权
         :return:
         '''
-        self.d_loss = (self.ad_loss_real + self.ad_loss_fake) * 0.001 * self.upgrade_q
+        L1quan = 36
+        self.d_loss = (self.ad_loss_real + self.ad_loss_fake) * 0.001 * L1quan
         # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
         #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
-        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.001 * self.upgrade_q
+        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.001 * L1quan
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)
 
