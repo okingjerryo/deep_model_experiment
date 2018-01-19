@@ -283,11 +283,10 @@ class Trainer(object):
         loss 加权
         :return:
         '''
-        ad_loss_quan = 1. / self.epoch * self.thisepoch
         self.d_loss = self.ad_loss_real + self.ad_loss_fake
         # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
         #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
-        self.g_loss = self.constraint_loss * (1. - ad_loss_quan) + self.ad_loss_syn * (ad_loss_quan)
+        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.001
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)
 
