@@ -25,6 +25,7 @@ class Trainer(object):
                  gpus_list='', check_point='check_point', output_size=224,
                  version='', savepath='', imagepath='', logfile='',
                  summary_dir='', discribe='', data_loader_valid=None, noise_z=10):
+
         self.ifsave = True
         self.restored=restored
         self.d_lr=d_learning_rate
@@ -125,6 +126,8 @@ class Trainer(object):
         '''
         self.global_step = slim.get_or_create_global_step()
         self.batch_data = tf.placeholder(dtype=tf.float32,shape=[None,self.input_size,self.input_size,self.input_channel],name='input_images')#image
+        # 用于动态调整L1权重占比
+        self.thisepoch = tf.placeholder(dtype=tf.float32, shape=None, name='this_epoch')
         #网络过程
         self._predict_gan()
         #损失公式
@@ -157,16 +160,17 @@ class Trainer(object):
                     batch_image[b_i*self.batch_size:(b_i+1)*self.batch_size,:,:,:]=self.data_loader_train.read_data_batch() # 删掉了 label
                 #D
                 _ ,loss_d=self.sess.run([self.train_d_op,self.d_loss],
-                        feed_dict={self.batch_data:batch_image})
+                                        feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
 
-                #G
-                _ = self.sess.run(self.train_g_op,
-                feed_dict={self.batch_data: batch_image})
+                # G 1:10 对抗训练
+                for i in range(5):
+                    _ = self.sess.run(self.train_g_op,
+                                      feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
                 # if interval_i%10:
                 loss_g, train_summary,step\
                     = self.sess.run(
                     [self.g_loss, self.summary_train,self.global_step],
-                    feed_dict={self.batch_data: batch_image})
+                    feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
                 self.summary_write.add_summary(train_summary,global_step=step)
 
                 logging.info('Epoch [%4d/%4d] [gpu%s] [global_step:%d]time:%.2f h, d_loss:%.4f, g_loss:%.4f'\
@@ -279,11 +283,11 @@ class Trainer(object):
         loss 加权
         :return:
         '''
-        L1quan = 36
-        self.d_loss = (self.ad_loss_real + self.ad_loss_fake) * 0.001 * L1quan
+        ad_loss_quan = 1. / self.epoch * self.thisepoch
+        self.d_loss = self.ad_loss_real + self.ad_loss_fake
         # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
         #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
-        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.001 * L1quan
+        self.g_loss = self.constraint_loss * (1. - ad_loss_quan) + self.ad_loss_syn * (ad_loss_quan)
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)
 

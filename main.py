@@ -27,7 +27,7 @@ flags.DEFINE_boolean('train', True, 'if Train or inference')
 flags.DEFINE_bool('random_crop', True, 'is random crop??')
 flags.DEFINE_float("beta1", 0.5, 'moment--m')
 flags.DEFINE_float("d_learning_rate", 0.0001, 'base learning rate')
-flags.DEFINE_float("g_learning_rate", 0.0002, 'base_learning rate')  # g多训一些
+flags.DEFINE_float("g_learning_rate", 0.0001, 'base_learning rate')
 flags.DEFINE_integer('mode', 2, 'GAN mode,2:mean MultiPIE')
 flags.DEFINE_float("validation_interval", 10, 'validation interval save the decode images')
 flags.DEFINE_integer("epoch", 250, 'train_epoch')
