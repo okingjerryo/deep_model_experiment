@@ -1,13 +1,15 @@
-import numpy as np
-import args as args
-import tensorflow as tf
 import os.path
-import glymur
+
 import cv2
+import numpy as np
+
+import args as args
 import util as util
+
+
 def convert_2d(r):
     # 添加均值为 0, 标准差为 64 的加性高斯白噪声
-    s = r + np.random.normal(0, 64, r.shape)
+    s = r + np.random.normal(0, 8, r.shape)
     if np.min(s) >= 0 and np.max(s) <= 255:
         return s
     # 对比拉伸

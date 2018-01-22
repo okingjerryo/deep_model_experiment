@@ -156,20 +156,21 @@ class Trainer(object):
         for epoch_n in trange(self.epoch): #trange
             for interval_i in range(int(self.batch_idxs)):
                 batch_image=np.zeros([self.batch_size*self.gpus_count,self.input_size,self.input_size,self.input_channel],np.float32)
+                loss_g = 2
                 for b_i in range(self.gpus_count):
                     batch_image[b_i*self.batch_size:(b_i+1)*self.batch_size,:,:,:]=self.data_loader_train.read_data_batch() # 删掉了 label
                 #D
                 _ ,loss_d=self.sess.run([self.train_d_op,self.d_loss],
                                         feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
-
-                # G 1:10 对抗训练
-                for i in range(5):
+                # 预先训练3个epoch d
+                if epoch_n > 1:
+                    #
                     _ = self.sess.run(self.train_g_op,
                                       feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
                 # if interval_i%10:
-                loss_g, train_summary,step\
+                loss_g, train_summary,step \
                     = self.sess.run(
-                    [self.g_loss, self.summary_train,self.global_step],
+                    [self.g_loss, self.summary_train, self.global_step],
                     feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
                 self.summary_write.add_summary(train_summary,global_step=step)
 
@@ -203,6 +204,7 @@ class Trainer(object):
         self.train_g_op = optimizer_g.apply_gradients(zip(grads_g,var_g))
         return global_step
 
+
     def _predict_gan(self, reuse=False):
         '''
         网络训练
@@ -216,13 +218,14 @@ class Trainer(object):
         LogitsWithNoise = tf.concat([self.logits, self.noise], axis=3)
         self.output_syn = nets.netG_deconder_gamma_32(LogitsWithNoise, self.output_channel, reuse=reuse)
         self.data_gt, self.data_noise = tf.split(self.batch_data, 2, axis=0)
-        # cgan 方案 对于d而言 使用了 output+真图作为真;output+假图作为假
-        self.data_gt_total = tf.concat([self.data_gt, self.data_gt], axis=0)
-        self.data_fake_total = tf.concat([self.output_syn, self.data_noise], axis=0)
+        # cgan 方案 对于d而言 使用了 noise+真图作为真;output+noise作为假
 
-        self.logits_d_real = nets.netD_discriminator_adloss_32(self.data_gt_total)
+        self.data_real_total = tf.concat([self.data_noise, self.data_gt], axis=0)
+        self.data_fake_total = tf.concat([self.data_noise, self.output_syn], axis=0)
+
+        self.logits_d_real = nets.netD_discriminator_adloss_32(self.data_real_total, reuse=tf.AUTO_REUSE)
         # self.logits_d_fake = nets.netD_discriminator_adloss_32(self.output_syn, reuse=True)
-        self.logits_d_fake = nets.netD_discriminator_adloss_32(self.data_fake_total, reuse=tf.AUTO_REUSE)
+        self.logits_d_fake = nets.netD_discriminator_adloss_32(self.data_fake_total, reuse=True)
     def _loss_gan(self):
         '''
         loss 计算
@@ -231,19 +234,18 @@ class Trainer(object):
         with tf.name_scope('D_loss'):
             #adversarial
             self.ad_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=tf.ones_like(self.logits_d_real),logits=self.logits_d_real
+                labels=tf.ones_like(self.logits_d_real), logits=self.logits_d_real
             ))
             self.ad_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.zeros_like(self.logits_d_fake),logits=self.logits_d_fake
             ))
 
-
         with tf.name_scope('G_loss'):
             self.ad_loss_syn = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=tf.ones_like(self.logits_d_fake),logits=self.logits_d_fake
+                labels=tf.ones_like(self.logits_d_fake), logits=self.logits_d_fake,
             ))
             # L1 loss
-            self.constraint_loss = tf.reduce_mean(tf.abs(tf.subtract(self.output_syn, self.data_gt_total)))
+            self.constraint_loss = tf.reduce_mean(tf.abs(tf.subtract(self.output_syn, self.data_real_total)))
         with tf.name_scope('loss'):
             tf.summary.scalar('ad_loss_real', self.ad_loss_real)
             tf.summary.scalar('ad_loss_fake',self.ad_loss_fake)
@@ -283,10 +285,10 @@ class Trainer(object):
         loss 加权
         :return:
         '''
-        self.d_loss = self.ad_loss_real + self.ad_loss_fake
+        self.d_loss = (self.ad_loss_real + self.ad_loss_fake)
         # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
         #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
-        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.001
+        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.003
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)
 

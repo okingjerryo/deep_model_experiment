@@ -64,10 +64,10 @@ def netG_encoder_gamma_32(image_input, reuse=False):
                 net = slim.conv2d(net, filter_num * 2, kernel_size, scope='conv2')
                 # 16
                 net = slim.conv2d(net, filter_num * 2, stride=2, kernel_size=kernel_size, scope='conv3')
-                net = slim.conv2d(net, filter_num * 2, kernel_size, scope='conv4')
+                net = slim.conv2d(net, filter_num * 4, kernel_size, scope='conv4')
                 # 8
                 net = slim.conv2d(net, filter_num * 4, stride=2, kernel_size=kernel_size, scope='conv6')
-                net = slim.conv2d(net, filter_num * 3, kernel_size, scope='conv7')
+                net = slim.conv2d(net, filter_num * 6, kernel_size, scope='conv7')
                 # 4
                 net = slim.conv2d(net, filter_num * 6, stride=2, kernel_size=kernel_size, scope='conv9')
                 net = slim.conv2d(net, filter_num * 8, kernel_size, scope='conv10')
@@ -105,13 +105,13 @@ def netG_deconder_gamma_32(feature, output_channel, reuse=False):
                 inputs_img = tf.reshape(fc1, [-1, 4, 4, filter_num * 8])
                 # print 'inputs_img',inputs_img.shape
                 # 4
-                net = slim.conv2d(inputs_img, filter_num * 8, kernel_size, scope='deconv01')
-                net = slim.conv2d(net, filter_num * 6, kernel_size, scope='deconv02')
+                net = slim.conv2d_transpose(inputs_img, filter_num * 8, kernel_size, scope='deconv01')
+                net = slim.conv2d_transpose(net, filter_num * 6, kernel_size, scope='deconv02')
                 # 8
-                net = slim.conv2d_transpose(net, filter_num * 3, stride=2, kernel_size=kernel_size, scope='deconv2')
+                net = slim.conv2d_transpose(net, filter_num * 6, stride=2, kernel_size=kernel_size, scope='deconv2')
                 net = slim.conv2d_transpose(net, filter_num * 4, kernel_size, scope='deconv3')
                 # 16
-                net = slim.conv2d_transpose(net, filter_num * 2, stride=2, kernel_size=kernel_size, scope='deconv5')
+                net = slim.conv2d_transpose(net, filter_num * 4, stride=2, kernel_size=kernel_size, scope='deconv5')
                 net = slim.conv2d_transpose(net, filter_num * 2, kernel_size, scope='deconv6')
                 # 32
                 net = slim.conv2d_transpose(net, filter_num * 2, stride=2, kernel_size=kernel_size, scope='deconv8')
