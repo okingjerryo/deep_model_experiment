@@ -89,6 +89,7 @@ class Trainer(object):
 
         #初始化模型
         os.environ['CUDA_VISIBLE_DEVICES'] = self.gpus_list
+
         self._init_model()
         # self._init_validation_model()
         #控制显存使用
@@ -126,8 +127,7 @@ class Trainer(object):
         '''
         self.global_step = slim.get_or_create_global_step()
         self.batch_data = tf.placeholder(dtype=tf.float32,shape=[None,self.input_size,self.input_size,self.input_channel],name='input_images')#image
-        # 用于动态调整L1权重占比
-        self.thisepoch = tf.placeholder(dtype=tf.float32, shape=None, name='this_epoch')
+
         #网络过程
         self._predict_gan()
         #损失公式
@@ -138,8 +138,8 @@ class Trainer(object):
         self.summary_train = tf.summary.merge_all()
         #获取训练的参数部分
         train_vars = tf.trainable_variables()
-        self.varsg = [var for var in train_vars if 'generator' in var.name]
-        self.varsd = [var for var in train_vars if 'discriminator' in var.name]
+        self.varsg = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+        self.varsd = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
         self.init_vars=self.varsg+self.varsd
         #优化函数
         self._get_train_op(self.global_step)
@@ -152,30 +152,30 @@ class Trainer(object):
         start_time = time.time()
 
         curr_interval=0
-        update_q = 1
         for epoch_n in trange(self.epoch): #trange
             for interval_i in range(int(self.batch_idxs)):
                 batch_image=np.zeros([self.batch_size*self.gpus_count,self.input_size,self.input_size,self.input_channel],np.float32)
-                loss_g = 2
+
                 for b_i in range(self.gpus_count):
                     batch_image[b_i*self.batch_size:(b_i+1)*self.batch_size,:,:,:]=self.data_loader_train.read_data_batch() # 删掉了 label
                 #D
                 _ ,loss_d=self.sess.run([self.train_d_op,self.d_loss],
-                                        feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
-                # 预先训练3个epoch d
-                if epoch_n > 1:
-                    #
-                    _ = self.sess.run(self.train_g_op,
-                                      feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
-                # if interval_i%10:
-                loss_g, train_summary,step \
+                                        feed_dict={self.batch_data: batch_image})
+
+                # G
+                _ = self.sess.run(self.train_g_op,
+                                  feed_dict={self.batch_data: batch_image})
+                loss_g, train_summary, step \
                     = self.sess.run(
                     [self.g_loss, self.summary_train, self.global_step],
-                    feed_dict={self.batch_data: batch_image, self.thisepoch: update_q})
-                self.summary_write.add_summary(train_summary,global_step=step)
+                    feed_dict={self.batch_data: batch_image})
+                if interval_i % 25 == 0:
+                    self.summary_write.add_summary(train_summary, global_step=step)
 
-                logging.info('Epoch [%4d/%4d] [gpu%s] [global_step:%d]time:%.2f h, d_loss:%.4f, g_loss:%.4f'\
-                %(epoch_n,self.epoch,self.gpus_list,step,(time.time()-start_time)/3600.0,loss_d,loss_g))
+                    logging.info('Epoch [%4d/%4d] [gpu%s] [global_step:%d]time:%.2f h, d_loss:%.4f, g_loss:%.4f' \
+                                 % (
+                                 epoch_n, self.epoch, self.gpus_list, step, (time.time() - start_time) / 3600.0, loss_d,
+                                 loss_g))
 
                 if (curr_interval) % int(self.sample_interval * self.batch_idxs) == 0:
                     if self.ifsave and curr_interval != 0:
@@ -184,7 +184,6 @@ class Trainer(object):
                                    global_step=step)
                 curr_interval+=1
             # 目的让网络训练到后面 L1权重越低
-            update_q += 1
     def _get_train_op(self,global_step):
         '''
         梯度计算
@@ -218,8 +217,9 @@ class Trainer(object):
         LogitsWithNoise = tf.concat([self.logits, self.noise], axis=3)
         self.output_syn = nets.netG_deconder_gamma_32(LogitsWithNoise, self.output_channel, reuse=reuse)
         self.data_gt, self.data_noise = tf.split(self.batch_data, 2, axis=0)
+        # 给内容loss用，无论噪声图还是原图 生成gan 必须要贴近真实
+        self.data_gt_total = tf.concat([self.data_gt, self.data_gt], axis=0)
         # cgan 方案 对于d而言 使用了 noise+真图作为真;output+noise作为假
-
         self.data_real_total = tf.concat([self.data_noise, self.data_gt], axis=0)
         self.data_fake_total = tf.concat([self.data_noise, self.output_syn], axis=0)
 
@@ -239,13 +239,15 @@ class Trainer(object):
             self.ad_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.zeros_like(self.logits_d_fake),logits=self.logits_d_fake
             ))
+            # self.d_l2_regular = tf.reduce_mean(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES,scope='discriminator'))*args.weight_L2_regular
 
         with tf.name_scope('G_loss'):
             self.ad_loss_syn = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.ones_like(self.logits_d_fake), logits=self.logits_d_fake,
             ))
-            # L1 loss
-            self.constraint_loss = tf.reduce_mean(tf.abs(tf.subtract(self.output_syn, self.data_real_total)))
+            # 与原图的MSE
+            self.constraint_loss = tf.reduce_mean(
+                tf.losses.mean_squared_error(labels=self.data_gt_total, predictions=self.output_syn))
         with tf.name_scope('loss'):
             tf.summary.scalar('ad_loss_real', self.ad_loss_real)
             tf.summary.scalar('ad_loss_fake',self.ad_loss_fake)
@@ -285,10 +287,9 @@ class Trainer(object):
         loss 加权
         :return:
         '''
-        self.d_loss = (self.ad_loss_real + self.ad_loss_fake)
-        # self.g_loss =self.constraint_loss+self.ad_loss_syn*0.001
-        #self.d_loss =self.constraint_loss+(self.ad_loss_real+self.ad_loss_fake)*0.000000001
-        self.g_loss = self.constraint_loss + self.ad_loss_syn * 0.003
+        # 引入正则项
+        self.d_loss = tf.divide(self.ad_loss_real + self.ad_loss_fake, tf.constant(2, dtype=tf.float32))
+        self.g_loss = self.constraint_loss * 0.997 + self.ad_loss_syn * 0.003
         tf.summary.scalar('losstotal/total_loss_d', self.d_loss)
         tf.summary.scalar('losstotal/total_loss_g', self.g_loss)
 

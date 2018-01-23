@@ -3,23 +3,16 @@ import os.path
 sunkejia
 file loader
 '''
+import args
 import scipy
 import os
-import tensorflow as tf
-from PIL import Image
 import random
-from skimage import io
-from skimage import color
-from skimage import transform
 import numpy as np
 import threading
 import queue as Queue
 import cv2
-import math
 from glob import glob
 import glob
-import sklearn.metrics.pairwise as pw
-import copy
 
 #自定义数据读取类
 '''
@@ -58,7 +51,7 @@ class ImageReader_Customize(object):
         if self.random_images:
             self._random_image()
         self.im_count=len(self.original_list)
-        self.epoch_batch=self.im_count*6.0/self.batch_size
+        self.epoch_batch = self.im_count * float(args.all_item_classes) / self.batch_size
         print(self.epoch_batch,'batchs/epoch')
 
     def _norm_img(self, img):

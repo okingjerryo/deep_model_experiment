@@ -52,7 +52,7 @@ def netG_encoder_gamma_32(image_input, reuse=False):
         if reuse:
             vs.reuse_variables()
         kernel_size = [3, 3]
-        filter_num = 32
+        filter_num = 64
         imageshape = image_input.get_shape().as_list()[1]
         print(imageshape)
         with tf.variable_scope('encoding'):
@@ -74,10 +74,10 @@ def netG_encoder_gamma_32(image_input, reuse=False):
 
                 net = tf.reshape(slim.flatten(net),
                                  [-1, 1, 1, int(imageshape / 8) * int(imageshape / 8) * filter_num * 8], name='fc1')
-                logits = slim.fully_connected(net, 64, activation_fn=None, normalizer_fn=None,
+                logits = slim.fully_connected(net, 1024, activation_fn=None, normalizer_fn=None,
                                               weights_initializer=tf.truncated_normal_initializer(stddev=0.02),
                                               scope='bottleneck')
-            output = logits  # 512维的向量
+            output = logits  # 1024维的向量
             return output
 
 
@@ -91,7 +91,7 @@ def netG_deconder_gamma_32(feature, output_channel, reuse=False):
     '''
     with tf.variable_scope('generator', reuse=reuse):
         kernel_size = [3, 3]
-        filter_num = 32
+        filter_num = 64
         with tf.variable_scope('decoding') as vs:
             if reuse:
                 vs.reuse_variables()
@@ -126,7 +126,7 @@ def netG_deconder_gamma_32(feature, output_channel, reuse=False):
 def netD_discriminator_adloss_32(image_input, reuse=False):
     with tf.variable_scope('discriminator', reuse=reuse) as vs:
         kernel_size = [3, 3]
-        filter_num = 32
+        filter_num = 64
         imageshape = image_input.get_shape().as_list()[1]
         with slim.arg_scope([slim.conv2d], normalizer_fn=slim.batch_norm, activation_fn=tf.nn.elu, padding='SAME',
                             weights_initializer=tf.truncated_normal_initializer(stddev=0.02)):

@@ -26,11 +26,11 @@ flags.DEFINE_integer("output_channel", 3, 'out_put_channel')
 flags.DEFINE_boolean('train', True, 'if Train or inference')
 flags.DEFINE_bool('random_crop', True, 'is random crop??')
 flags.DEFINE_float("beta1", 0.5, 'moment--m')
-flags.DEFINE_float("d_learning_rate", 0.001, 'base learning rate')
-flags.DEFINE_float("g_learning_rate", 0.001, 'base_learning rate')
+flags.DEFINE_float("d_learning_rate", 0.00001, 'base learning rate')  # 优化精度提高 牺牲训练速度
+flags.DEFINE_float("g_learning_rate", 0.00001, 'base_learning rate')
 flags.DEFINE_integer('mode', 2, 'GAN mode,2:mean MultiPIE')
 flags.DEFINE_float("validation_interval", 10, 'validation interval save the decode images')
-flags.DEFINE_integer("epoch", 255, 'train_epoch')
+flags.DEFINE_integer("epoch", 300, 'train_epoch')
 
 '''image data reader'''
 flags.DEFINE_string("datapath", '/home/huangfei/db/huatielu/train/', '')
@@ -105,7 +105,7 @@ def pic_process():
 
 if __name__ == '__main__':
     print(tf.__path__)
-    pic_process()
+    # pic_process()
     # 如果在分支中看到证明 分支正常
     # print("testing checkout")
-    # main()
+    main()
