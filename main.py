@@ -15,7 +15,7 @@ from train import Trainer
 from util import ImageReader_Customize
 
 flags = tf.app.flags
-flags.DEFINE_integer("batch_size", 256, 'tarin_batch_size for one gpu')
+flags.DEFINE_integer("batch_size", 64, 'tarin_batch_size for one gpu')
 flags.DEFINE_integer("sample_batch_size",20, 'test,sample batch_size for one gpu,一般比pose_c相关')  # 保证可以被2、gpu数整除
 flags.DEFINE_string('root_path', './logdir_caspeal', 'root path')
 flags.DEFINE_integer("input_size", 32, 'train_size')
@@ -26,11 +26,11 @@ flags.DEFINE_integer("output_channel", 3, 'out_put_channel')
 flags.DEFINE_boolean('train', True, 'if Train or inference')
 flags.DEFINE_bool('random_crop', True, 'is random crop??')
 flags.DEFINE_float("beta1", 0.5, 'moment--m')
-flags.DEFINE_float("d_learning_rate", 0.0002, 'base learning rate')
-flags.DEFINE_float("g_learning_rate", 0.0002, 'base_learning rate')
+flags.DEFINE_float("d_learning_rate", 0.00001, 'base learning rate')  # 优化精度提高 牺牲训练速度
+flags.DEFINE_float("g_learning_rate", 0.00001, 'base_learning rate')
 flags.DEFINE_integer('mode', 2, 'GAN mode,2:mean MultiPIE')
 flags.DEFINE_float("validation_interval", 10, 'validation interval save the decode images')
-flags.DEFINE_integer("epoch", 240, 'train_epoch')
+flags.DEFINE_integer("epoch", 300, 'train_epoch')
 
 '''image data reader'''
 flags.DEFINE_string("datapath", '/home/huangfei/db/huatielu/train/', '')
@@ -43,10 +43,10 @@ flags.DEFINE_string("test_noisepath", '/home/huangfei/db/huatielu/test/noise/', 
 
 
 flags.DEFINE_integer('thread_nums', 10, 'data read thread nums')
-flags.DEFINE_string('model_name', 'L1GAN', '')
-flags.DEFINE_string('newtag', 'zero-2018-1-2-01', 'model version')
+flags.DEFINE_string('model_name', 'L1CGAN', '')
+flags.DEFINE_string('newtag', 'cgan-2018-1-16', 'model version')
 # 如果GD不一区训练的话，会出现彩色块
-flags.DEFINE_string('discribe', '第一版本','version discribe')
+flags.DEFINE_string('discribe', '第三版本', 'version discribe')
 flags.DEFINE_string("gpu_list", '0', "CUDA visiabTruele device")
 '''continue train'''
 flags.DEFINE_boolean('restored', False, 'finetuning model')
@@ -106,4 +106,6 @@ def pic_process():
 if __name__ == '__main__':
     print(tf.__path__)
     # pic_process()
+    # 如果在分支中看到证明 分支正常
+    # print("testing checkout")
     main()
