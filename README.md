@@ -2,7 +2,7 @@
 personal deep model idea&amp;baseline experiment,using tensorflow.
 
 # GAN
-## superpixExperment [actived]
+## fixGanExperment [actived]
 - 针对image auto-denoise 模型的探索,当前在小像素图片着手。
 - 当前使用模型结构 AE+L1CGAN.
 - code frame:tensorflow r1.0; work or not:30%    
