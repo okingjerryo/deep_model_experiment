@@ -92,8 +92,7 @@ def main():
 
 
 def pic_process():
-
-
+    # test dmain
     list = glob.glob(args.train_dir+"/*")
     i = 1
     for path in list:
