@@ -9,4 +9,4 @@ personal deep model idea&amp;baseline experiment,using tensorflow.
 - img: 32x32; L1:0.997+adversal:0.003; lr0.0001; bsize:64    
 
 #### last updated
-18-3-6 rebuild project structure,clean the code
+18-3-14 dehaze write unet generator
