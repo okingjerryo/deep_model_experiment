@@ -13,8 +13,17 @@ def get_estimator(feature_columns):
     )
 
 
-def stack_CAGAN_main():
-    pass
+def stack_CAGAN_main(input_X):
+    O_1 = unet_generator(input_X, name="O1_encoder")
+    O_1_op = O_1["output_conv"]
+    O_1_D = vgg19_descriminator(O_1_op, name="O1_discriminator")
+    O_2 = unet_generator(O_1_op, name="O2_encoder")
+    O_2_op = O_2["output_conv"]
+    O_2_D = vgg19_descriminator(O_2_op, name="O2_discriminator")
+    return {
+        "D_detail": [O_1_D["logist"], O_2_D["logist"]],
+        "op": O_2
+    }
 
 
 def unet_generator(input_X, name='encoder', conv_act_fn=tf.nn.leaky_relu,deconv_act_fun = tf.nn.relu):
@@ -107,13 +116,56 @@ def unet_generator(input_X, name='encoder', conv_act_fn=tf.nn.leaky_relu,deconv_
     }
 
 
-if __name__ == '__main__':
-    a = tf.ones([40, 256, 256, 3])
-    generator1 = unet_generator(a, name='testGenerator')
+def vgg19_descriminator(input_X, name='descriminator', conv_act_fn=tf.nn.leaky_relu):
+    # 128
+    conv1 = tf.layers.conv2d(input_X, 64, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv1_1')
+    conv1 = tf.layers.conv2d(conv1, 64, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv1_2')
+    conv1 = tf.layers.max_pooling2d(conv1, pool_size=2, strides=2, name=name + '_conv1_Mpool')
 
+    # 64
+    conv2 = tf.layers.conv2d(conv1, 128, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv2_1')
+    conv2 = tf.layers.conv2d(conv2, 128, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv2_2')
+    conv2 = tf.layers.max_pooling2d(conv2, pool_size=2, strides=2, name=name + '_conv2_pool')
+
+    # 32
+    conv3 = tf.layers.conv2d(conv2, 256, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv3_1')
+    conv3 = tf.layers.conv2d(conv3, 256, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv3_2')
+    conv3 = tf.layers.conv2d(conv3, 256, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv3_3')
+    conv3 = tf.layers.conv2d(conv3, 256, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv3_4')
+    conv3 = tf.layers.max_pooling2d(conv3, pool_size=2, strides=2, name=name + '_conv3_Mpool')
+
+    # 16
+    conv4 = tf.layers.conv2d(conv3, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv4_1')
+    conv4 = tf.layers.conv2d(conv4, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv4_2')
+    conv4 = tf.layers.conv2d(conv4, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv4_3')
+    conv4 = tf.layers.conv2d(conv4, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv4_4')
+    conv4 = tf.layers.max_pooling2d(conv4, pool_size=2, strides=2, name=name + '_conv4_Mpool')
+
+    # 8
+    conv5 = tf.layers.conv2d(conv4, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv5_1')
+    conv5 = tf.layers.conv2d(conv5, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv5_2')
+    conv5 = tf.layers.conv2d(conv5, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv5_3')
+    conv5 = tf.layers.conv2d(conv5, 512, kernel_size=3, padding='same', activation=conv_act_fn, name=name + '_conv5_4')
+    conv5 = tf.layers.max_pooling2d(conv5, pool_size=2, strides=2, name=name + '_conv5_Mpool')
+
+    # float reshape
+    f_conv5 = tf.reshape(conv5, [conv5.shape[0], conv5.shape[1] * conv5.shape[2] * conv5.shape[3]],
+                         name=name + "_conv5_flatten")
+    # FC
+    fc_1 = tf.layers.dense(f_conv5, 4096, activation=conv_act_fn, name=name + "_fc1")
+    fc_1 = tf.layers.dropout(fc_1, name=name + "_fc1_dp")
+    fc_2 = tf.layers.dense(fc_1, 1000, activation=conv_act_fn, name=name + "_fc2")
+    fc_2 = tf.layers.dropout(fc_2, name=name + "_fc2_dp")
+    # soft_max
+    logist = tf.layers.dense(fc_2, 1, activation=tf.nn.softmax)
+    return {"logist": logist,
+            "conv_detail": [conv1, conv2, conv3, conv4, conv5, f_conv5, fc_1, fc_2]
+            }
+if __name__ == '__main__':
+    a = tf.ones([128, 256, 256, 3])
+    dict = stack_CAGAN_main(a)
     init_op = tf.global_variables_initializer()
     with tf.Session(config=args.gpu_option()) as sess:
         sess.run(init_op)
-        out_dic = sess.run(generator1)
-        for layer in out_dic['conv_detail']:
-            print(layer.shape)
+        dic = sess.run(dict["op"])
+        print(dic["output_conv"].shape)
