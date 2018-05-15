@@ -1,6 +1,6 @@
 import tensorflow as tf
 from os import path
-from dehazeExperment import util
+from dehazeExperment import op
 from dehazeExperment import args
 from glob import glob
 from tqdm import tqdm
@@ -13,7 +13,7 @@ VAILD_DATASET_TYPE = 0
 DATA_HANDEL = tf.placeholder(dtype=tf.string, shape=[], name='dataset_handle')
 
 
-def _img_effect_process(img_mat, ram_seed=tf.set_random_seed(util.get_timestamp_now())):
+def _img_effect_process(img_mat, ram_seed=tf.set_random_seed(op.get_timestamp_now())):
     # todo 1: 确保每次只在noise-GT对中获得图片相同，当前为每个batch相同
     # todo 2: 图片读取时的操作，random crop+resize
     img_crop = tf.random_crop(img_mat, args.IMG_CROP_SIZE, seed=ram_seed)
@@ -45,7 +45,7 @@ def _read_img_process(img_example, Example_type):
         noise_img = tf.image.decode_image(parse_features['noise_image'])
         GT_img = tf.image.decode_image(parse_features['label'])
         # 使得两个图片的分割区域一致
-        seed = util.get_timestamp_now()
+        seed = op.get_timestamp_now()
         noise_img = _img_effect_process(noise_img, ram_seed=seed)  # todo：每个图片batch的位置一定
         GT_img = _img_effect_process(GT_img, ram_seed=seed)
         return (noise_img, GT_img)
@@ -170,11 +170,12 @@ def get_feature_columns():
         feature_columns.append(tf.feature_column.numeric_column(key=key))
     return feature_columns
 
+
 if __name__ == '__main__':
     # haze_1_tarin
     # train_file = glob(args.IMG_HAZE_GT_PATH)
     # write_img_record(train_file,dataset_type=TRAIN_DATASET_TYPE)
-    vaild_file = glob(args.IMG_HAZE_VAILD_PATH)
-    write_img_record(vaild_file, dataset_type=VAILD_DATASET_TYPE)
+    # vaild_file = glob(args.IMG_HAZE_VAILD_PATH)
+    # write_img_record(vaild_file, dataset_type=VAILD_DATASET_TYPE)
     # haze_1_vaild
     vaildate_record_useable()
