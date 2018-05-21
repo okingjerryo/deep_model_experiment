@@ -1,16 +1,23 @@
 import tensorflow as tf
 from os import path
-from dehazeExperment import op
-from dehazeExperment import args
+import op
+import args
 from glob import glob
 from tqdm import tqdm
 import cv2
 import numpy as np
+import dlib
+import os
 # 用于识别不同的操作图片集
 TRAIN_DATASET_TYPE = 1
 VAILD_DATASET_TYPE = 0
 
 DATA_HANDEL = tf.placeholder(dtype=tf.string, shape=[], name='dataset_handle')
+
+# 需要自己去网上下载 shape_predictor_68_face_landmarks.dat 文件
+predictor_path = "resource/shape_predictor_68_face_landmarks.dat"
+detector = dlib.get_frontal_face_detector()
+predictor = dlib.shape_predictor(predictor_path)
 
 
 def _img_effect_process(img_mat, ram_seed=tf.set_random_seed(op.get_timestamp_now())):
@@ -171,6 +178,100 @@ def get_feature_columns():
     return feature_columns
 
 
+# 手动设置裁剪框的大小， 分别表示left, top, right, bottom边框扩大率
+rescaleBB = [2.1, 3, 2.1, 2.5]
+
+
+def save_crop_images(file_list, save_root_path):
+    for image_path in file_list:
+        print('> crop image', image_path)
+        try:
+            img = cv2.imread(image_path)
+
+            dets = detector(img, 1)
+            if len(dets) == 0:
+                print('> Could not detect the face, skipping the image ...', image_path)
+                continue
+            if len(dets) > 1:
+                print('> Process only the first detected face !')
+            detected_face = dets[0]
+            imcrop = cropByFaceDet(img, detected_face)
+
+            parent_dir, img_name = get_dir_name(image_path)
+
+            cv2.imwrite(image_path, imcrop)
+        except KeyboardInterrupt:
+            break
+        except:
+            continue
+
+
+def get_dir_name(img_path):
+    tmp = img_path.split('/')
+    return tmp[-2], tmp[-1]
+
+
+def cropImg(img, tlx, tly, brx, bry, rescale):
+    l = float(tlx)
+    t = float(tly)
+    ww = float(brx - l)
+    hh = float(bry - t)
+
+    # Approximate LM tight BB
+    h = img.shape[0]
+    w = img.shape[1]
+    # cv2.rectangle(img, (int(l), int(t)), (int(brx), int(bry)), \
+    #     (0, 255, 255), 2)
+    # todo 判断 不加黑边
+    cx = l + ww / 2
+    cy = t + hh / 2
+    tsize = max(ww, hh) / 2
+    l = cx - tsize
+    t = cy - tsize
+
+    # Approximate expanded bounding box
+    bl = int(round(cx - rescale[0] * tsize))
+    if bl < 0:
+        bl = 0
+    bt = int(round(cy - rescale[1] * tsize))
+    if bt < 0:
+        bt = 0
+
+    br = int(round(cx + rescale[2] * tsize))
+    if br > w:
+        br = w
+    bb = int(round(cy + rescale[3] * tsize))
+    if bb > h:
+        bb = h
+    nw = int(br - bl)
+    nh = int(bb - bt)
+    imcrop = np.zeros((nh, nw, 3), dtype='uint8')
+
+    ll = 0
+    if bl < 0:
+        ll = -bl
+        bl = 0
+    rr = nw
+    if br > w:
+        rr = w + nw - br
+        br = w
+    tt = 0
+    if bt < 0:
+        tt = -bt
+        bt = 0
+    bbb = nh
+    if bb > h:
+        bbb = h + nh - bb
+        bb = h
+    imcrop[tt:bbb, ll:rr, :] = img[bt:bb, bl:br, :]
+    return imcrop
+
+
+def cropByFaceDet(img, detected_face):
+    return cropImg(img, detected_face.left(), detected_face.top(), \
+                   detected_face.right(), detected_face.bottom(), rescaleBB)
+
+
 if __name__ == '__main__':
     # haze_1_tarin
     # train_file = glob(args.IMG_HAZE_GT_PATH)
@@ -178,4 +279,7 @@ if __name__ == '__main__':
     # vaild_file = glob(args.IMG_HAZE_VAILD_PATH)
     # write_img_record(vaild_file, dataset_type=VAILD_DATASET_TYPE)
     # haze_1_vaild
-    vaildate_record_useable()
+    # file_list = glob("/home/uryuo/db/starSketch/img/*/*.*")
+    file_list2 = glob("/home/uryuo/db/starSketch/img/*/*/*.*")
+
+    save_crop_images(file_list2, 'crops')
