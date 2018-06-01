@@ -2,6 +2,7 @@ import time
 from datetime import datetime
 import tensorflow as tf
 import args
+import numpy as np
 from args import a  # import from output args
 
 
@@ -136,7 +137,7 @@ def rgb_to_lab(srgb):
             linear_mask = tf.cast(srgb_pixels <= 0.04045, dtype=tf.float32)
             exponential_mask = tf.cast(srgb_pixels > 0.04045, dtype=tf.float32)
             rgb_pixels = (srgb_pixels / 12.92 * linear_mask) + (
-                        ((srgb_pixels + 0.055) / 1.055) ** 2.4) * exponential_mask
+                    ((srgb_pixels + 0.055) / 1.055) ** 2.4) * exponential_mask
             rgb_to_xyz = tf.constant([
                 #    X        Y          Z
                 [0.412453, 0.212671, 0.019334],  # R
@@ -156,7 +157,7 @@ def rgb_to_lab(srgb):
             linear_mask = tf.cast(xyz_normalized_pixels <= (epsilon ** 3), dtype=tf.float32)
             exponential_mask = tf.cast(xyz_normalized_pixels > (epsilon ** 3), dtype=tf.float32)
             fxfyfz_pixels = (xyz_normalized_pixels / (3 * epsilon ** 2) + 4 / 29) * linear_mask + (
-                        xyz_normalized_pixels ** (1 / 3)) * exponential_mask
+                    xyz_normalized_pixels ** (1 / 3)) * exponential_mask
 
             # convert to lab
             fxfyfz_to_lab = tf.constant([
@@ -191,7 +192,7 @@ def lab_to_rgb(lab):
             linear_mask = tf.cast(fxfyfz_pixels <= epsilon, dtype=tf.float32)
             exponential_mask = tf.cast(fxfyfz_pixels > epsilon, dtype=tf.float32)
             xyz_pixels = (3 * epsilon ** 2 * (fxfyfz_pixels - 4 / 29)) * linear_mask + (
-                        fxfyfz_pixels ** 3) * exponential_mask
+                    fxfyfz_pixels ** 3) * exponential_mask
 
             # denormalize for D65 white point
             xyz_pixels = tf.multiply(xyz_pixels, [0.950456, 1.0, 1.088754])
@@ -209,9 +210,20 @@ def lab_to_rgb(lab):
             linear_mask = tf.cast(rgb_pixels <= 0.0031308, dtype=tf.float32)
             exponential_mask = tf.cast(rgb_pixels > 0.0031308, dtype=tf.float32)
             srgb_pixels = (rgb_pixels * 12.92 * linear_mask) + (
-                        (rgb_pixels ** (1 / 2.4) * 1.055) - 0.055) * exponential_mask
+                    (rgb_pixels ** (1 / 2.4) * 1.055) - 0.055) * exponential_mask
 
         return tf.reshape(srgb_pixels, tf.shape(lab))
+
+
+# 特定格式转换
+def readYUVFile(filename, width, height):
+    with open(filename, 'rb') as rfile:
+        Y = np.fromfile(rfile, 'uint8', width * height).reshape([height, width])
+        wuv = width // 2
+        huv = height // 2
+        U = np.fromfile(rfile, 'uint8', wuv * huv).reshape([huv, wuv])
+        V = np.fromfile(rfile, 'uint8', wuv * huv).reshape([huv, wuv])
+    return (Y, U, V)
 
 
 if __name__ == '__main__':
