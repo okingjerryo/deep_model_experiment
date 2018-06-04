@@ -15,7 +15,9 @@ def get_estimator(feature_columns):
 
 
 def main():
-    pass
+    a = tf.constant(1)
+    sess = tf.Session(args.gpu_option())
+    print(sess.run(a))
 
 
 if __name__ == '__main__':

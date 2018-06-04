@@ -12,7 +12,7 @@ import tensorflow as tf
 import args as args
 import dataEffect as effect
 from train import Trainer
-from util import ImageReader_Customize
+from op import ImageReader_Customize
 
 flags = tf.app.flags
 flags.DEFINE_integer("batch_size", 64, 'tarin_batch_size for one gpu')

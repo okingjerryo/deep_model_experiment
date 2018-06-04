@@ -14,7 +14,7 @@ import tensorflow.contrib.slim as slim
 from tqdm import trange
 
 import model as nets
-import util as util
+import op as util
 
 
 class Trainer(object):
