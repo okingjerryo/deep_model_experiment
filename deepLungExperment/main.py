@@ -1,6 +1,6 @@
-import dataset
-import args
-import model
+from deepLungExperment import dataset
+from deepLungExperment import args
+from deepLungExperment import model
 import tensorflow as tf
 
 

@@ -1,23 +1,19 @@
 import tensorflow as tf
 from os import path
-from dehazeExperment import op
-from dehazeExperment import args
+from deepLungExperment import op
+from deepLungExperment import args
 from glob import glob
 from tqdm import tqdm
 import cv2
+from deepLungExperment.args import a
 import numpy as np
-import dlib
-import os
+
 # 用于识别不同的操作图片集
-TRAIN_DATASET_TYPE = 1
-VAILD_DATASET_TYPE = 0
+TRAIN_DATASET_TYPE = 0
+VAILD_DATASET_TYPE = 1
+TEST_DATASET_TYPE = 2
 
 DATA_HANDEL = tf.placeholder(dtype=tf.string, shape=[], name='dataset_handle')
-
-# 需要自己去网上下载 shape_predictor_68_face_landmarks.dat 文件
-predictor_path = "resource/shape_predictor_68_face_landmarks.dat"
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor(predictor_path)
 
 
 def _img_effect_process(img_mat, ram_seed=tf.set_random_seed(op.get_timestamp_now())):
@@ -33,7 +29,7 @@ def _get_tfrecord_structure(dataset_type):
     :param dataset_type:
     :return: features 给tf.parse_single_example用
     '''
-    if dataset_type == TRAIN_DATASET_TYPE:
+    if dataset_type == TRAIN_DATASET_TYPE or dataset_type == TEST_DATASET_TYPE:
         return {
             'noise_image': tf.FixedLenFeature((), tf.string, default_value=''),
             'label': tf.FixedLenFeature((), tf.string, default_value='')
@@ -42,6 +38,8 @@ def _get_tfrecord_structure(dataset_type):
         return {
             'noise_image': tf.FixedLenFeature((), tf.string, default_value='')
         }
+
+
 def _read_img_process(img_example, Example_type):
     features = None
     ## 注意注意！ features中的key value对一定要与tfrecord中的k-v相关对应！
@@ -67,59 +65,58 @@ def _read_img_process(img_example, Example_type):
         return vaild_img
 
 
-def _read_trainImg_to_string(GT_filepath,dataset_type):
+def _read_trainImg_to_string(GT_filepath, dataset_type):
     # 因为原图是jpg格式,为了识别使用CV2先转成了image矩阵后再编码为 tf string
+
     img_mat = cv2.imread(GT_filepath)
+    img_height = np.shape(img_mat)[0]
+    img_width = np.shape(img_mat)[1]
     input_img = tf.image.encode_jpeg(img_mat, quality=100)
 
-    if dataset_type == TRAIN_DATASET_TYPE:
+    if dataset_type == TRAIN_DATASET_TYPE or dataset_type == TEST_DATASET_TYPE:
         noise_name = path.basename(GT_filepath)
         noise_dir = path.dirname(args.IMG_HAZE_NOISE_PATH)
-        noise_path = noise_dir+'/'+noise_name
+        noise_path = noise_dir + '/' + noise_name
         noise_mat = cv2.imread(noise_path)
         noise_img = tf.image.encode_jpeg(noise_mat, quality=100)
 
         return {
-            'noise_img':noise_img ,
-            'GT_img':input_img
+            'noise_img': noise_img,
+            'GT_img': input_img
         }
-    elif dataset_type == VAILD_DATASET_TYPE:
+    elif dataset_type == TEST_DATASET_TYPE:
         return {
-            'vaild_img':input_img
+            'vaild_img': input_img
         }
+
 
 def _bytes_feature(bytes):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[bytes]))
 
-def write_img_record(filelist,dataset_type):
-    print('train_file convert start')
-    print('detect',len(filelist),'files')
+
+def write_img_record(filelist, dataset_type):
+    print('file convert start')
+    print('detect', len(filelist), 'files')
     record_path = None
     if dataset_type == TRAIN_DATASET_TYPE:
         record_path = args.PATH2RECORD + args.RECORD_TRAIN_NAME
+    elif dataset_type == TEST_DATASET_TYPE:
+        record_path = args.PATH2RECORD + a.record_test_name
     elif dataset_type == VAILD_DATASET_TYPE:
-        record_path = args.PATH2RECORD + args.RECORD_VAILD_NAME
+        record_path = args.PATH2RECORD + a.record_vaild_name
     writer = tf.python_io.TFRecordWriter(record_path)
     with tf.Session(config=args.gpu_option()) as sess:
+        # 从文件中分别将几个图片读出来，格式即使Test也存gt（只是实际用不用的问题）
         for thisfile in tqdm(filelist, ascii=True, desc='write img to tfrecord'):
-
-            if dataset_type==TRAIN_DATASET_TYPE:
-                feature = sess.run(_read_trainImg_to_string(thisfile,dataset_type=TRAIN_DATASET_TYPE))
-                example = tf.train.Example(features=tf.train.Features(feature={
-                    'noise_image': _bytes_feature(feature['noise_img']),
-                    'label': _bytes_feature(feature['GT_img'])
-                }))
-                writer.write(example.SerializeToString())
-
-            elif dataset_type==VAILD_DATASET_TYPE:
-                feature = sess.run(_read_trainImg_to_string(thisfile, dataset_type=VAILD_DATASET_TYPE))
-                example = tf.train.Example(features=tf.train.Features(feature={
-                    'noise_image': _bytes_feature(feature['vaild_img'])
-                }))
-                writer.write(example.SerializeToString())
+            feature = sess.run(_read_trainImg_to_string(thisfile, dataset_type=dataset_type))
+            example = tf.train.Example(features=tf.train.Features(feature={
+                'noise_image': _bytes_feature(feature['noise_img']),
+                'label': _bytes_feature(feature['GT_img'])
+            }))
+            writer.write(example.SerializeToString())
 
         writer.close()
-    print('save complete,path:',record_path)
+    print('save complete,path:', record_path)
 
 
 def _init_handle_train():
@@ -178,108 +175,11 @@ def get_feature_columns():
     return feature_columns
 
 
-# 手动设置裁剪框的大小， 分别表示left, top, right, bottom边框扩大率
-rescaleBB = [2.1, 3, 2.1, 2.5]
-
-
-def save_crop_images(file_list, save_root_path):
-    for image_path in file_list:
-        print('> crop image', image_path)
-        try:
-            img = cv2.imread(image_path)
-
-            dets = detector(img, 1)
-            if len(dets) == 0:
-                print('> Could not detect the face, skipping the image ...', image_path)
-                continue
-            if len(dets) > 1:
-                print('> Process only the first detected face !')
-            detected_face = dets[0]
-            imcrop = cropByFaceDet(img, detected_face)
-
-            parent_dir, img_name = get_dir_name(image_path)
-
-            cv2.imwrite(image_path, imcrop)
-        except KeyboardInterrupt:
-            break
-        except:
-            continue
-
-
-def get_dir_name(img_path):
-    tmp = img_path.split('/')
-    return tmp[-2], tmp[-1]
-
-
-def cropImg(img, tlx, tly, brx, bry, rescale):
-    l = float(tlx)
-    t = float(tly)
-    ww = float(brx - l)
-    hh = float(bry - t)
-
-    # Approximate LM tight BB
-    h = img.shape[0]
-    w = img.shape[1]
-    # cv2.rectangle(img, (int(l), int(t)), (int(brx), int(bry)), \
-    #     (0, 255, 255), 2)
-    # todo 判断 不加黑边
-    cx = l + ww / 2
-    cy = t + hh / 2
-    tsize = max(ww, hh) / 2
-    l = cx - tsize
-    t = cy - tsize
-
-    # Approximate expanded bounding box
-    bl = int(round(cx - rescale[0] * tsize))
-    if bl < 0:
-        bl = 0
-    bt = int(round(cy - rescale[1] * tsize))
-    if bt < 0:
-        bt = 0
-
-    br = int(round(cx + rescale[2] * tsize))
-    if br > w:
-        br = w
-    bb = int(round(cy + rescale[3] * tsize))
-    if bb > h:
-        bb = h
-    nw = int(br - bl)
-    nh = int(bb - bt)
-    imcrop = np.zeros((nh, nw, 3), dtype='uint8')
-
-    ll = 0
-    if bl < 0:
-        ll = -bl
-        bl = 0
-    rr = nw
-    if br > w:
-        rr = w + nw - br
-        br = w
-    tt = 0
-    if bt < 0:
-        tt = -bt
-        bt = 0
-    bbb = nh
-    if bb > h:
-        bbb = h + nh - bb
-        bb = h
-    imcrop[tt:bbb, ll:rr, :] = img[bt:bb, bl:br, :]
-    return imcrop
-
-
-def cropByFaceDet(img, detected_face):
-    return cropImg(img, detected_face.left(), detected_face.top(), \
-                   detected_face.right(), detected_face.bottom(), rescaleBB)
-
-
 if __name__ == '__main__':
-    # haze_1_tarin
+    # chinamm train
     # train_file = glob(args.IMG_HAZE_GT_PATH)
     # write_img_record(train_file,dataset_type=TRAIN_DATASET_TYPE)
     # vaild_file = glob(args.IMG_HAZE_VAILD_PATH)
     # write_img_record(vaild_file, dataset_type=VAILD_DATASET_TYPE)
     # haze_1_vaild
-    # file_list = glob("/home/uryuo/db/starSketch/img/*/*.*")
-    file_list2 = glob("/home/uryuo/db/starSketch/img/*/*/*.*")
-
-    save_crop_images(file_list2, 'crops')
+    pass
